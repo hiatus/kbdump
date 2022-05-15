@@ -21,7 +21,7 @@
 
 const char banner[] =
 "kbdump [options] [device]\n"
-"	Dump keys from a keyboard device\n\n"
+"	Dump keys from a keyboard device until F10 is pressed\n\n"
 
 "	-h              help\n"
 "	-o [file]       dump to [file] instead of stdout\n"

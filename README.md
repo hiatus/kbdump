@@ -1,3 +1,3 @@
 kbdump
 ======
-Dump keys from a keyboard device until F10 is pressed.
+Dump keys from a keyboard device on a Linux system until F10 is pressed.

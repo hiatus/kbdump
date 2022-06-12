@@ -35,11 +35,6 @@ int main(int argc, char **argv)
 
 	ssize_t (*dump)(int, int , int) = DUMP_DEFAULT;
 
-	if (argc < 2) {
-		fputs(banner, stderr);
-		return EXIT_FAILURE;
-	}
-
 	while ((opt = getopt(argc, argv, ":ho:f:")) != -1) {
 		switch (opt) {
 			case 'h':
@@ -91,16 +86,21 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (optind != argc - 1) {
-		fputs(banner, stderr);
+	if (optind == argc)
+		kbd = STDIN_FILENO;
+	else
+	if (optind == argc - 1) {
+		if ((kbd = open(argv[optind], O_RDONLY)) < 0) {
+			fprintf(stderr, "Failed to open '%s", argv[optind]);
+			perror("'");
 
-		ret = EXIT_FAILURE;
-		goto fd_close;
+			ret = EXIT_FAILURE;
+			goto fd_close;
+		}
 	}
-
-	if ((kbd = open(argv[optind], O_RDONLY)) < 0) {
-		fprintf(stderr, "Failed to open '%s", argv[optind]);
-		perror("'");
+	else {
+		printf("argc == %i, optind == %i", argc, optind);
+		fputs(banner, stderr);
 
 		ret = EXIT_FAILURE;
 		goto fd_close;

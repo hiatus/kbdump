@@ -20,10 +20,11 @@
 #define LOGFILE_MODE (S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) // Mode for the log file
 
 const char banner[] =
-"kbdump [options] [device]\n"
-"	Dump keys from a keyboard device until F10 is pressed\n\n"
+"kbdump [options] [device|dump]\n"
+"	Dump keys from keyboard devices\n\n"
 
 "	-h              help\n"
+"	-s              enable stopping the dump when F10 is pressed"
 "	-o [file]       dump to [file] instead of stdout\n"
 "	-f [ascii|log]  format events in ascii or log lines\n";
 
@@ -31,17 +32,22 @@ int main(int argc, char **argv)
 {
 	int opt;
 	int ret = 0;
+	int end = -1;
 	int kbd = 0, log = STDOUT_FILENO;
 
 	ssize_t (*dump)(int, int , int) = DUMP_DEFAULT;
 
-	while ((opt = getopt(argc, argv, ":ho:f:")) != -1) {
+	while ((opt = getopt(argc, argv, ":hso:f:")) != -1) {
 		switch (opt) {
 			case 'h':
 				ret = EXIT_SUCCESS;
 				fputs(banner, stderr);
 
 				goto fd_close;
+
+			case 's':
+				end = KEYCODE_END;
+				break;
 
 			case 'o':
 				if ((log = open(optarg, O_CREAT | O_WRONLY, LOGFILE_MODE)) < 0) {
@@ -53,6 +59,7 @@ int main(int argc, char **argv)
 				}
 
 				break;
+
 
 			case 'f':
 				if (! strcmp("ascii", optarg))
@@ -106,7 +113,7 @@ int main(int argc, char **argv)
 		goto fd_close;
 	}
 
-	dump(kbd, log, KEYCODE_END);
+	dump(kbd, log, end);
 
 fd_close:
 	// Redundant but consistent

@@ -177,7 +177,18 @@ ssize_t dump_ascii(int kbd, int out, int end)
 				);
 			}
 
-			write(out, &key, 1);
+			switch (key) {
+				case '\b':
+					write(out, "<BS>", 4);
+					break;
+
+				case '\r':
+					write(out, "<CR>", 4);
+					break;
+
+				default:
+					write(out, &key, 1);
+			}
 		}
 	}
 

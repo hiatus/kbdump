@@ -24,7 +24,7 @@ const char banner[] =
 "	Dump keys from keyboard devices\n\n"
 
 "	-h              help\n"
-"	-s              enable stopping the dump when F10 is pressed"
+"	-s              enable stopping the dump when F10 is pressed\n"
 "	-o [file]       dump to [file] instead of stdout\n"
 "	-f [ascii|log]  format events in ascii or log lines\n";
 

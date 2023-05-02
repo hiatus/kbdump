@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <fcntl.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <linux/input.h>
@@ -26,6 +27,7 @@ const char banner[] =
 "	-h              help\n"
 "	-s              enable stopping the dump when F10 is pressed\n"
 "	-o [file]       dump to [file] instead of stdout\n"
+"	-t [secs]       print timestamps on ascii dumps after [secs] seconds of idleness\n"
 "	-f [ascii|log]  format events in ascii or log lines\n";
 
 int main(int argc, char **argv)
@@ -33,11 +35,12 @@ int main(int argc, char **argv)
 	int opt;
 	int ret = 0;
 	int end = -1;
+	int ts_interval = -1;
 	int kbd = 0, log = STDOUT_FILENO;
 
-	ssize_t (*dump)(int, int , int) = DUMP_DEFAULT;
+	ssize_t (*dump)(int, int , int, int) = DUMP_DEFAULT;
 
-	while ((opt = getopt(argc, argv, ":hso:f:")) != -1) {
+	while ((opt = getopt(argc, argv, ":hsot:f:")) != -1) {
 		switch (opt) {
 			case 'h':
 				ret = EXIT_SUCCESS;
@@ -60,6 +63,15 @@ int main(int argc, char **argv)
 
 				break;
 
+			case 't':
+				if ((ts_interval = strtol(optarg, NULL, 10)) < 0) {
+					fprintf(stderr, "Invalid timestamp interval: '%s'\n", optarg);
+
+					ret = EXIT_FAILURE;
+					goto fd_close;
+				}
+
+				break;
 
 			case 'f':
 				if (! strcmp("ascii", optarg))
@@ -113,7 +125,7 @@ int main(int argc, char **argv)
 		goto fd_close;
 	}
 
-	dump(kbd, log, end);
+	dump(kbd, log, end, ts_interval);
 
 fd_close:
 	// Redundant but consistent

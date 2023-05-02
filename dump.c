@@ -7,13 +7,17 @@
 #include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <time.h>
 #include <string.h>
 #include <linux/input.h>
 
 #include "dump.h"
 
-#define MAX_LINE 64
-#define FMT_LINE "[%zu.%zu] type %u, value %i, code %u, ascii '%c'\n"
+#define MAX_LINE 128
+
+#define FMT_TIMESTAMP "[%d/%m/%Y, %H:%M:%S]"
+#define FMT_LOG_NORMAL  "type 0x%02x, value 0x%02x, code 0x%02x, ascii 0x%02x: '%c'"
+#define FMT_LOG_SPECIAL "type 0x%02x, value 0x%02x, code 0x%02x, ascii 0x%02x: '%s'"
 
 #define KEY_RELEASED 0
 #define KEY_PRESSED  1
@@ -115,7 +119,7 @@ static int _keycode_ascii_shift(int kc)
 	return -1;
 }
 
-ssize_t dump_raw(int kbd, int out, int end)
+ssize_t dump_raw(int kbd, int out, int end, int ts_interval)
 {
 	ssize_t ret;
 	struct input_event ie = {.code = 0};
@@ -135,12 +139,16 @@ ssize_t dump_raw(int kbd, int out, int end)
 	return ret;
 }
 
-ssize_t dump_ascii(int kbd, int out, int end)
+ssize_t dump_ascii(int kbd, int out, int end, int ts_interval)
 {
 	ssize_t ret;
+	time_t last_time = 0;
+	size_t line_len;
 
 	char key;
 	char capslock = 0, shift = 0;
+
+	char log_line[MAX_LINE];
 
 	struct input_event ie = {.code = 0};
 
@@ -170,6 +178,15 @@ ssize_t dump_ascii(int kbd, int out, int end)
 		dumper = (shift) ? _keycode_ascii_shift : _keycode_ascii;
 
 		if ((key = dumper(ie.code)) >= 0) {
+			if (ts_interval >= 0 && ie.time.tv_sec - last_time >= ts_interval) {
+				line_len = strftime(
+					log_line, MAX_LINE,
+					"\n" FMT_TIMESTAMP "\n", localtime(&ie.time.tv_sec)
+				);
+
+				write(out, log_line, line_len);
+			}
+
 			if (capslock) {
 				key = (
 					IS_LOWER(key) ? UPPERCASE(key) :
@@ -190,21 +207,27 @@ ssize_t dump_ascii(int kbd, int out, int end)
 					write(out, &key, 1);
 			}
 		}
+
+		if (ts_interval >= 0)
+			last_time = ie.time.tv_sec;
 	}
 
 	return ret;
 }
 
-ssize_t dump_log(int kbd, int out, int end)
+ssize_t dump_log(int kbd, int out, int end, int ts_interval)
 {
 	ssize_t ret;
+	size_t line_len;
 
 	char key;
-	char cl = 0, ls = 0, rs = 0;
+	char capslock = 0, shift = 0;
 
-	char line[MAX_LINE];
+	char log_line[MAX_LINE];
 
 	struct input_event ie = {.code = 0};
+
+	int (*dumper)(int);
 
 	for (ret = 0; ie.code != end && read(kbd, &ie, sizeof(ie)) == sizeof(ie); ++ret) {
 		// Ignore non-key events
@@ -213,39 +236,82 @@ ssize_t dump_log(int kbd, int out, int end)
 
 		// Handle capitalization
 		if (ie.code == KEY_CAPSLOCK && ie.value == KEY_PRESSED)
-			cl ^= 1;
+			capslock ^= 1;
 		else
-		if (ie.code == KEY_LEFTSHIFT) {
+		if (ie.code == KEY_LEFTSHIFT || ie.code == KEY_RIGHTSHIFT) {
 			if (ie.value == KEY_PRESSED)
-				rs = 1;
+				shift = 1;
 			else
 			if (ie.value == KEY_RELEASED)
-				rs = 0;
-		}
-		else
-		if (ie.code == KEY_RIGHTSHIFT) {
-			if (ie.value == KEY_PRESSED)
-				rs = 1;
-			else
-			if (ie.value == KEY_RELEASED)
-				rs = 0;
+				shift = 0;
 		}
 
-		// Ignore key releases
+		// Ignore releases of non-modifier keys
 		if (ie.value == KEY_RELEASED)
 			continue;
 
-		// Dump log line
-		if ((key = _keycode_ascii(ie.code)) >= 0) {
-			if (cl || ls || rs)
-				key = UPPERCASE(key);
+		dumper = (shift) ? _keycode_ascii_shift : _keycode_ascii;
 
-			snprintf(
-				line, MAX_LINE, FMT_LINE,
-				ie.time.tv_sec, ie.time.tv_usec, ie.type, ie.value, ie.code, key
+		// Dump log line
+		if ((key = dumper(ie.code)) >= 0) {
+			if (capslock) {
+				key = (
+					IS_LOWER(key) ? UPPERCASE(key) :
+					IS_UPPER(key) ? LOWERCASE(key) : key
+				);
+			}
+
+			line_len = strftime(
+				log_line, MAX_LINE,
+				FMT_TIMESTAMP, localtime(&ie.time.tv_sec)
 			);
 
-			write(out, line, strlen(line));
+			switch (key) {
+				case '\t':
+					line_len += snprintf(
+						log_line + line_len, MAX_LINE - line_len,
+						" " FMT_LOG_SPECIAL "\n",
+						ie.type, ie.value, ie.code, key, "<Tab>"
+					);
+
+					break;
+
+				case '\n':
+					line_len += snprintf(
+						log_line + line_len, MAX_LINE - line_len,
+						" " FMT_LOG_SPECIAL "\n",
+						ie.type, ie.value, ie.code, key, "<LF>"
+					);
+
+					break;
+
+				case '\r':
+					line_len += snprintf(
+						log_line + line_len, MAX_LINE - line_len,
+						" " FMT_LOG_SPECIAL "\n",
+						ie.type, ie.value, ie.code, key, "<CR>"
+					);
+
+					break;
+
+				case '\b':
+					line_len += snprintf(
+						log_line + line_len, MAX_LINE - line_len,
+						" " FMT_LOG_SPECIAL "\n",
+						ie.type, ie.value, ie.code, key, "<BS>"
+					);
+
+					break;
+
+				default:
+					line_len += snprintf(
+						log_line + line_len, MAX_LINE - line_len,
+						" " FMT_LOG_NORMAL "\n",
+						ie.type, ie.value, ie.code, key, key
+					);
+			}
+
+			write(out, log_line, line_len);
 		}
 	}
 

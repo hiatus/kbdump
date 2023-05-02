@@ -34,6 +34,7 @@
 static int _keycode_ascii(int kc)
 {
 	switch (kc) {
+		case KEY_ESC:          return '\e';
 		case KEY_1:            return '1';  case KEY_2:            return '2';
 		case KEY_3:            return '3';  case KEY_4:            return '4';
 		case KEY_5:            return '5';  case KEY_6:            return '6';
@@ -78,6 +79,7 @@ static int _keycode_ascii(int kc)
 static int _keycode_ascii_shift(int kc)
 {
 	switch (kc) {
+		case KEY_ESC:          return '\e';
 		case KEY_1:            return '!';  case KEY_2:            return '@';
 		case KEY_3:            return '#';  case KEY_4:            return '$';
 		case KEY_5:            return '%';  case KEY_6:            return '6';
@@ -195,6 +197,10 @@ ssize_t dump_ascii(int kbd, int out, int end, int ts_interval)
 			}
 
 			switch (key) {
+				case '\e':
+					write(out, "<Esc>", 5);
+					break;
+
 				case '\b':
 					write(out, "<BS>", 4);
 					break;
@@ -267,6 +273,15 @@ ssize_t dump_log(int kbd, int out, int end, int ts_interval)
 			);
 
 			switch (key) {
+				case '\e':
+					line_len += snprintf(
+						log_line + line_len, MAX_LINE - line_len,
+						" " FMT_LOG_SPECIAL "\n",
+						ie.type, ie.value, ie.code, key, "<Esc>"
+					);
+
+					break;
+
 				case '\t':
 					line_len += snprintf(
 						log_line + line_len, MAX_LINE - line_len,

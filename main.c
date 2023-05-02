@@ -118,7 +118,6 @@ int main(int argc, char **argv)
 		}
 	}
 	else {
-		printf("argc == %i, optind == %i", argc, optind);
 		fputs(banner, stderr);
 
 		ret = EXIT_FAILURE;
